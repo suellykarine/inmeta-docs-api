@@ -1,26 +1,61 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCollaboratorDto } from './dto/create-collaborator.dto';
 import { UpdateCollaboratorDto } from './dto/update-collaborator.dto';
 
 @Injectable()
 export class CollaboratorsService {
-  create(createCollaboratorDto: CreateCollaboratorDto) {
-    return 'This action adds a new collaborator';
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(createCollaboratorDto: CreateCollaboratorDto) {
+    const emailExists = await this.prisma.collaborator.findUnique({
+      where: { email: createCollaboratorDto.email },
+    });
+
+    if (emailExists) {
+      throw new ConflictException('This email address is already registered.');
+    }
+
+    return this.prisma.collaborator.create({
+      data: createCollaboratorDto,
+    });
   }
 
-  findAll() {
-    return `This action returns all collaborators`;
+  async findAll() {
+    return this.prisma.collaborator.findMany({
+      where: { deletedAt: null },
+    });
+  }
+  async findOne(id: string) {
+    const collaborator = await this.prisma.collaborator.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!collaborator) {
+      throw new NotFoundException('Collaborator not found.');
+    }
+
+    return collaborator;
+  }
+  async update(id: string, updateCollaboratorDto: UpdateCollaboratorDto) {
+    await this.findOne(id);
+
+    return this.prisma.collaborator.update({
+      where: { id },
+      data: updateCollaboratorDto,
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} collaborator`;
-  }
-
-  update(id: number, updateCollaboratorDto: UpdateCollaboratorDto) {
-    return `This action updates a #${id} collaborator`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} collaborator`;
+  async remove(id: string) {
+    await this.findOne(id);
+    await this.prisma.collaborator.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    return { message: 'collaborator successfully removed.' };
   }
 }
